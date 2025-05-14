@@ -9,6 +9,6 @@ trigger StockItemTrigger on Stock_Item__c (before insert, before delete) {
     if(Trigger.isDelete && Trigger.isBefore) {
         //call the class in your handler for before delete
     }
-
+//////
 //MN-comments
 }
