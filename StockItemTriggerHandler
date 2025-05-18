@@ -1,0 +1,90 @@
+public class StockItemTriggerHandler {
+
+    /* Business Logic: 1. Before a Stock Item can be created, check to see if a stock item currently exists with the same name.
+	If the name matches, change the name of the duplicate item so that “Duplicate Item” is added to the end of the name (eg, ‘12” Skillet - Duplicate Item’).
+	*/
+    // Notes: If an item with the same name already exists, rename the new one.
+    public static void handleBeforeInsert(List<Stock_Item__c> newItems) {
+
+        Set<String> newNames = new Set<String>();
+        
+        // Collect all item names being inserted
+        for (Stock_Item__c item : newItems) {
+            newNames.add(item.Item_Name__c);
+        }
+
+        // Query for existing items to see if any item already has the same name.
+        Map<String, Stock_Item__c> existingItemsMap = new Map<String, Stock_Item__c>();
+        for (Stock_Item__c existing : [
+            SELECT Id, Item_Name__c 
+            FROM Stock_Item__c 
+            WHERE Item_Name__c IN :newNames
+        ]) {
+            existingItemsMap.put(existing.Item_Name__c, existing);
+        }
+
+        for (Stock_Item__c item : newItems) {
+            if (existingItemsMap.containsKey(item.Item_Name__c)) {
+                // Business Logic: A duplicate name exists — handle the conflict.
+                // Option 1: Rename duplicate
+                item.Item_Name__c += ' - Duplicate Item';
+
+                // Option 2 (Bonus): Block the insert with an error
+
+            }
+        }
+    }
+    
+    
+    /* Business Logic: 2. Before a stock item is deleted, make sure that the stock on hand is 0 (zero). 
+    If not zero, allow it to be deleted BUT create a case so that someone is alerted to the deleted record.
+	*/
+    
+    // allow the deletion but create a Case to notify someone.
+    public static void handleBeforeDelete(List<Stock_Item__c> itemsToDelete) {
+        List<Case> casesToCreate = new List<Case>();
+
+        for (Stock_Item__c item : itemsToDelete) {
+            if (item.Stock_on_Hand__c != 0) {
+                Case c = new Case(
+                    Subject = 'Stock Item Deleted but it is not a Zero Stock'+ item.Item_Name__c,
+                    Description = 'Stock Item Deleted: ' +
+                        '\nID: ' + item.Id +
+                        '\nName: ' + item.Item_Name__c +
+                        '\nStock on Hand: ' + item.Stock_on_Hand__c,
+                    Status = 'New',
+                    Origin = 'Apex Trigger'
+                );
+                casesToCreate.add(c);
+            }
+        }
+		// Notes: Insert all the cases at once
+        if (!casesToCreate.isEmpty()) {
+            insert casesToCreate;
+        }
+    }
+    
+	/*Business Logic:
+	3. Create a method called getLowStockItems that can be called from elsewhere in our codebase (including Execute Anonymous).
+	This should return a list of all the Stock Items that have a stock-on-hand count at or below their minimum stock level.
+	It should include the following fields for the Stock Items it returns:
+	ID
+	Item_Name__c
+	Item_Stock_is_Low__c
+	Minimum_Stock_Level__c
+	Stock_on_Hand__c
+	*/
+    
+    // Method for use in Execute Anonymous or other classes
+    public static List<Stock_Item__c> getLowStockItems() {
+        return [
+            SELECT Id, 
+            	   Item_Name__c, 
+            	   Item_Stock_is_Low__c, 
+                   Minimum_Stock_Level__c, 
+            	   Stock_on_Hand__c
+            FROM Stock_Item__c
+            WHERE Stock_on_Hand__c <= Minimum_Stock_Level__c
+        ];
+    }
+}
